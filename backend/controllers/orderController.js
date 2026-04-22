@@ -4,9 +4,11 @@ import Stripe from "stripe";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
-// placing user order for frontend
+// ================= PLACE ORDER =================
 const placeOrder = async (req, res) => {
+	console.log("ORDER API HIT:", req.body);
   const frontend_url = "https://food-delivery-frontend-s2l9.onrender.com";
+
   try {
     const newOrder = new orderModel({
       userId: req.body.userId,
@@ -14,8 +16,12 @@ const placeOrder = async (req, res) => {
       amount: req.body.amount,
       address: req.body.address,
     });
+
     await newOrder.save();
-    await userModel.findByIdAndUpdate(req.body.userId, { cartData: {} });
+
+    await userModel.findByIdAndUpdate(req.body.userId, {
+      cartData: {},
+    });
 
     const line_items = req.body.items.map((item) => ({
       price_data: {
@@ -34,13 +40,13 @@ const placeOrder = async (req, res) => {
         product_data: {
           name: "Delivery Charges",
         },
-        unit_amount: 2 * 100,
+        unit_amount: 200,
       },
       quantity: 1,
     });
 
     const session = await stripe.checkout.sessions.create({
-      line_items: line_items,
+      line_items,
       mode: "payment",
       success_url: `${frontend_url}/verify?success=true&orderId=${newOrder._id}`,
       cancel_url: `${frontend_url}/verify?success=false&orderId=${newOrder._id}`,
@@ -49,15 +55,19 @@ const placeOrder = async (req, res) => {
     res.json({ success: true, session_url: session.url });
   } catch (error) {
     console.log(error);
-    res.json({ success: false, message: "Error" });
+    res.json({ success: false, message: "Error in placeOrder" });
   }
 };
 
+// ================= VERIFY ORDER =================
 const verifyOrder = async (req, res) => {
   const { orderId, success } = req.body;
+
   try {
-    if (success == "true") {
-      await orderModel.findByIdAndUpdate(orderId, { payment: true });
+    if (success === "true") {
+      await orderModel.findByIdAndUpdate(orderId, {
+        payment: true,
+      });
       res.json({ success: true, message: "Paid" });
     } else {
       await orderModel.findByIdAndDelete(orderId);
@@ -65,53 +75,65 @@ const verifyOrder = async (req, res) => {
     }
   } catch (error) {
     console.log(error);
-    res.json({ success: false, message: "Error" });
+    res.json({ success: false, message: "Error in verifyOrder" });
   }
 };
 
-// user orders for frontend
+// ================= USER ORDERS =================
 const userOrders = async (req, res) => {
   try {
-    const orders = await orderModel.find({ userId: req.body.userId });
+    const orders = await orderModel.find({
+      userId: req.body.userId,
+    });
+
     res.json({ success: true, data: orders });
   } catch (error) {
     console.log(error);
-    res.json({ success: false, message: "Error" });
+    res.json({ success: false, message: "Error in userOrders" });
   }
 };
 
-// Listing orders for admin pannel
+// ================= LIST ORDERS (ADMIN) =================
 const listOrders = async (req, res) => {
   try {
-    let userData = await userModel.findById(req.body.userId);
+    const userData = await userModel.findById(req.body.userId);
+
     if (userData && userData.role === "admin") {
       const orders = await orderModel.find({});
       res.json({ success: true, data: orders });
     } else {
-      res.json({ success: false, message: "You are not admin" });
+      res.json({ success: false, message: "Not Admin" });
     }
   } catch (error) {
     console.log(error);
-    res.json({ success: false, message: "Error" });
+    res.json({ success: false, message: "Error in listOrders" });
   }
 };
 
-// api for updating status
+// ================= UPDATE STATUS =================
 const updateStatus = async (req, res) => {
   try {
-    let userData = await userModel.findById(req.body.userId);
+    const userData = await userModel.findById(req.body.userId);
+
     if (userData && userData.role === "admin") {
       await orderModel.findByIdAndUpdate(req.body.orderId, {
         status: req.body.status,
       });
-      res.json({ success: true, message: "Status Updated Successfully" });
-    }else{
-      res.json({ success: false, message: "You are not an admin" });
+
+      res.json({ success: true, message: "Status Updated" });
+    } else {
+      res.json({ success: false, message: "Not Admin" });
     }
   } catch (error) {
     console.log(error);
-    res.json({ success: false, message: "Error" });
+    res.json({ success: false, message: "Error in updateStatus" });
   }
 };
 
-export { placeOrder, verifyOrder, userOrders, listOrders, updateStatus };
+export {
+  placeOrder,
+  verifyOrder,
+  userOrders,
+  listOrders,
+  updateStatus,
+};
