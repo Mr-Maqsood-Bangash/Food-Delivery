@@ -1,5 +1,5 @@
 # ---------- Stage 1: Build ----------
-FROM node:20-alpine AS builder
+FROM node:18-alpine AS builder
 
 WORKDIR /app
 
@@ -12,9 +12,13 @@ COPY . .
 
 
 # ---------- Stage 2: Production ----------
-FROM node:20-alpine AS runner
+FROM node:18-alpine AS prod
 
 WORKDIR /app
+
+COPY package*.json ./
+
+RUN npm install --only=production
 
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
