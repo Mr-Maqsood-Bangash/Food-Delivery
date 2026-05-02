@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        DOCKERHUB_CREDENTIALS_ID = 'docker-cred'
+        DOCKERHUB_CREDENTIALS_ID = 'docker_cred'
         BRANCH_NAME = "${env.BRANCH_NAME}"
         IMAGE_TAG   = "${BRANCH_NAME}-${BUILD_NUMBER}"
     }
