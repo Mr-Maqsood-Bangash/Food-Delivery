@@ -8,7 +8,6 @@ pipeline {
         IMAGE_TAG   = "${env.BRANCH_NAME}-${env.BUILD_NUMBER}"
     }
 
-
     stages {
 
         stage('Clone Repo') {
@@ -73,14 +72,14 @@ FRONTEND_IMAGE=${env.FRONTEND_TAG_DH}
         stage('Deploy Environment') {
             steps {
                 dir("${WORKSPACE}") {
-                sh """
-                    docker compose --env-file .env down
-                    docker compose --env-file .env pull
-                    docker compose --env-file .env up -d --remove-orphans
-                """
+                    sh """
+                        docker compose --env-file .env down
+                        docker compose --env-file .env pull
+                        docker compose --env-file .env up -d --remove-orphans
+                    """
+                }
             }
         }
-    }
 
         stage('Cleanup Local Images') {
             steps {
@@ -88,6 +87,16 @@ FRONTEND_IMAGE=${env.FRONTEND_TAG_DH}
                     docker rmi ${env.BACKEND_TAG_DH} ${env.FRONTEND_TAG_DH} || true
                 """
             }
+        }
+    }
+
+    post {
+        success {
+            echo "✅ ${env.BRANCH_NAME} environment deployed successfully using Docker Hub images!"
+        }
+
+        failure {
+            echo "❌ Deployment failed for ${env.BRANCH_NAME}. Check logs."
         }
     }
 }
