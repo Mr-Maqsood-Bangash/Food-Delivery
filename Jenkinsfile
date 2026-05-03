@@ -12,7 +12,7 @@ pipeline {
 
         stage('Clone Repo') {
             steps {
-                git branch: 'feature/Maqsood-khan',
+                git branch: 'dev',
                     url: 'https://github.com/Mr-Maqsood-Bangash/Food-Delivery.git',
                     credentialsId: "${GITHUB_CREDENTIALS_ID}"
             }
