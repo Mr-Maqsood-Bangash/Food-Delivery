@@ -1,0 +1,12 @@
+# backend-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-service
+spec:
+  type: ClusterIP
+  selector:
+    app: backend
+  ports:
+  - port: 4000                       # ← 5000 se 4000
+    targetPort: 4000                 # ← 5000 se 4000
