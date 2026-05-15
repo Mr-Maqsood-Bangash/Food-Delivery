@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: frontend
-        image: maqsoodbangash/food-frontend:v4
+        image: maqsoodbangash/food-frontend:v5
         ports:
         - containerPort: 3000
         resources:

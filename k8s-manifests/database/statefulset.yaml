@@ -35,7 +35,7 @@ spec:
                 key: MONGO_INITDB_ROOT_PASSWORD
         volumeMounts:
         - name: mongo-storage
-          mountPath: /data/mongo
+          mountPath: /data/db
       volumes:
       - name: mongo-storage
         persistentVolumeClaim:
