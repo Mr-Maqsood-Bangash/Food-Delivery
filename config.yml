@@ -11,9 +11,6 @@ nodes:
       - containerPort: 443     # HTTPS
         hostPort: 443
         protocol: TCP
-      - containerPort: 30007   # Node.js NodePort
-        hostPort: 30007
-        protocol: TCP
     extraMounts:
       - hostPath: /mnt/kind-storage/mongo
         containerPath: /data/mongo
