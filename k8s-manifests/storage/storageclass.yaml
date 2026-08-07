@@ -1,8 +1,0 @@
-# StorageClass
-apiVersion: storage.k8s.io/v1
-kind: StorageClass
-metadata:
-  name: standard-storage
-provisioner: kubernetes.io/no-provisioner
-volumeBindingMode: WaitForFirstConsumer
-
