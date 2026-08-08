@@ -1,1 +1,2 @@
 Error from server (NotFound): services "forntend-service" not found
+error: Service frontend-service does not have a service port 3000
