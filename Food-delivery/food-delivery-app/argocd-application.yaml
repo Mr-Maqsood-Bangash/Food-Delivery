@@ -15,7 +15,7 @@ spec:
   project: default
   source:
     repoURL: https://github.com/Mr-Maqsood-Bangash/Food-Delivery.git
-    path: .
+    path: food-delivery-app
     targetRevision: feature/Maqsood-khan
     helm:
       valueFiles:
