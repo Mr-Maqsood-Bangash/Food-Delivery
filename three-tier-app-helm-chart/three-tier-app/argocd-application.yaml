@@ -17,7 +17,7 @@ spec:
   project: default
   source:
     repoURL: https://github.com/Mr-Maqsood-Bangash/Food-Delivery.git
-    path: three-tier-app
+    path: three-tier-app-helm-chart/three-tier-app
     targetRevision: feature/Maqsood-khan
     helm:
       valueFiles:
