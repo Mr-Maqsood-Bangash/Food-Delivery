@@ -1,0 +1,125 @@
+# ------------------------------------------------------------------
+# Namespaces
+# ------------------------------------------------------------------
+namespaces:
+  frontend: frontend
+  backend: backend
+  database: database
+
+# ------------------------------------------------------------------
+# Storage (StorageClass + PV). Set storage.create=false if your
+# cluster already provisions volumes dynamically (e.g. EKS + EBS CSI).
+# ------------------------------------------------------------------
+storage:
+  create: true
+  storageClassName: standard-storage
+  provisioner: kubernetes.io/no-provisioner
+  volumeBindingMode: WaitForFirstConsumer
+  pv:
+    name: mongo-pv
+    capacity: 1Gi
+    hostPath: /data/mongo
+    accessMode: ReadWriteOnce
+  pvc:
+    name: mongo-pvc
+    size: 1Gi
+
+# ------------------------------------------------------------------
+# MongoDB credentials.
+# Do NOT commit real passwords here for production — override with:
+#   helm install ... --set mongo.password=<secret> --set mongo.username=<user>
+# or a separate -f secrets-values.yaml (kept out of git).
+# ------------------------------------------------------------------
+mongo:
+  username: admin
+  password: securepass
+  replicaSetName: rs0
+  database:
+    image: mongo:6
+    storageRequest: 1Gi
+    resources:
+      requests:
+        cpu: 250m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
+# ------------------------------------------------------------------
+# Backend (Node/Express API)
+# ------------------------------------------------------------------
+backend:
+  image:
+    repository: maqsoodbangash/food-backend
+    tag: v7
+    pullPolicy: IfNotPresent
+  replicaCount: 1
+  containerPort: 4000
+  service:
+    port: 4000
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  probes:
+    path: /
+    liveness:
+      initialDelaySeconds: 15
+      periodSeconds: 20
+      timeoutSeconds: 5
+      failureThreshold: 3
+    readiness:
+      initialDelaySeconds: 10
+      periodSeconds: 15
+      timeoutSeconds: 5
+      failureThreshold: 3
+
+# ------------------------------------------------------------------
+# Frontend (React UI)
+# ------------------------------------------------------------------
+frontend:
+  image:
+    repository: maqsoodbangash/food-frontend
+    tag: v6
+    pullPolicy: IfNotPresent
+  replicaCount: 1
+  containerPort: 3000
+  service:
+    type: NodePort
+    port: 80
+    nodePort: 30007
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  probes:
+    path: /api/food
+    liveness:
+      initialDelaySeconds: 10
+      periodSeconds: 15
+    readiness:
+      initialDelaySeconds: 5
+      periodSeconds: 10
+
+# ------------------------------------------------------------------
+# Mongo replica-set init Job (runs as a post-install/post-upgrade hook)
+# ------------------------------------------------------------------
+mongoInit:
+  enabled: true
+  image: mongo:6
+  backoffLimit: 5
+
+
+
+#ingress-controller
+ingress:
+  enabled: false
+  className: nginx
+  host: ""
+  annotations: {}  
