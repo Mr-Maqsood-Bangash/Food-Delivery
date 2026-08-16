@@ -4,13 +4,11 @@ metadata:
   name: three-tier-app
   namespace: argocd
   annotations:
-    argocd-image-updater.argoproj.io/image-list: >-
-      backend=maqsoodbangash/food-backend,
-      frontend=maqsoodbangash/food-frontend
-    argocd-image-updater.argoproj.io/backend.update-strategy: semver
-    argocd-image-updater.argoproj.io/frontend.update-strategy: semver
-    argocd-image-updater.argoproj.io/backend.allow-tags: "regexp:^v\\d+$"
-    argocd-image-updater.argoproj.io/frontend.allow-tags: "regexp:^v\\d+$"
+    argocd-image-updater.argoproj.io/image-list: "backend=maqsoodbangash/food-backend,frontend=maqsoodbangash/food-frontend"
+    argocd-image-updater.argoproj.io/backend.update-strategy: "semver"
+    argocd-image-updater.argoproj.io/frontend.update-strategy: "semver"
+    argocd-image-updater.argoproj.io/backend.allow-tags: "regexp:^v\\d+\\.\\d+\\.\\d+$"
+    argocd-image-updater.argoproj.io/frontend.allow-tags: "regexp:^v\\d+\\.\\d+\\.\\d+$"
     argocd-image-updater.argoproj.io/backend.helm.image-tag: backend.image.tag
     argocd-image-updater.argoproj.io/frontend.helm.image-tag: frontend.image.tag
     argocd-image-updater.argoproj.io/write-back-method: git
@@ -19,8 +17,8 @@ spec:
   project: default
   source:
     repoURL: https://github.com/Mr-Maqsood-Bangash/Food-Delivery.git
-    targetRevision: feature/Maqsood-khan
     path: three-tier-app
+    targetRevision: feature/Maqsood-khan
     helm:
       valueFiles:
         - values.yaml
