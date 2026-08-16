@@ -51,7 +51,7 @@ mongo:
 backend:
   image:
     repository: maqsoodbangash/food-backend
-    tag: v7
+    tag: v1.0.3
     pullPolicy: IfNotPresent
   replicaCount: 1
   containerPort: 4000
@@ -83,7 +83,7 @@ backend:
 frontend:
   image:
     repository: maqsoodbangash/food-frontend
-    tag: v6
+    tag: v1.0.2
     pullPolicy: IfNotPresent
   replicaCount: 1
   containerPort: 3000
