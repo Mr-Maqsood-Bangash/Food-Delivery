@@ -1,0 +1,14 @@
+{{- if .Values.storage.create }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Values.storage.pvc.name }}
+  namespace: {{ .Values.namespaces.database }}
+spec:
+  accessModes:
+    - {{ .Values.storage.pv.accessMode }}
+  resources:
+    requests:
+      storage: {{ .Values.storage.pvc.size }}
+  storageClassName: {{ .Values.storage.storageClassName }}
+{{- end }}
