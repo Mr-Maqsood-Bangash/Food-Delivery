@@ -1,0 +1,12 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-service-external
+  namespace: {{ .Values.namespaces.frontend }}
+spec:
+  type: ExternalName
+  externalName: backend-service.{{ .Values.namespaces.backend }}.svc.cluster.local
+  ports:
+    - port: {{ .Values.backend.service.port }}
+{{- end }}

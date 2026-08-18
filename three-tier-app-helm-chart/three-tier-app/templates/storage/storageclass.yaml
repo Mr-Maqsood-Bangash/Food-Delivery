@@ -1,0 +1,21 @@
+{{- if .Values.storage.create }}
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: {{ .Values.storage.storageClassName }}
+provisioner: {{ .Values.storage.provisioner }}
+volumeBindingMode: {{ .Values.storage.volumeBindingMode }}
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ .Values.storage.pv.name }}
+spec:
+  capacity:
+    storage: {{ .Values.storage.pv.capacity }}
+  accessModes:
+    - {{ .Values.storage.pv.accessMode }}
+  hostPath:
+    path: {{ .Values.storage.pv.hostPath | quote }}
+  storageClassName: {{ .Values.storage.storageClassName }}
+{{- end }}

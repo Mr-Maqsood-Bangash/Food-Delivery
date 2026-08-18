@@ -1,0 +1,65 @@
+{{- if .Values.mongoInit.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mongo-init
+  namespace: {{ .Values.namespaces.database }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "5"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  backoffLimit: {{ .Values.mongoInit.backoffLimit }}
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: mongo-init
+          image: {{ .Values.mongoInit.image }}
+          command:
+            - sh
+            - -c
+            - |
+              echo "Waiting for MongoDB to be ready..."
+              until mongosh --host mongo-0.mongo-service.{{ .Values.namespaces.database }}.svc.cluster.local:27017 --eval "db.adminCommand('ping')" >/dev/null 2>&1; do
+                echo "MongoDB not ready, retrying in 3s..."
+                sleep 3
+              done
+
+              echo "Creating root user if not exists..."
+              mongosh --host mongo-0.mongo-service.{{ .Values.namespaces.database }}.svc.cluster.local:27017 --eval "
+                db = db.getSiblingDB('admin');
+                if (!db.getUser('$MONGO_INITDB_ROOT_USERNAME')) {
+                  db.createUser({
+                    user: '$MONGO_INITDB_ROOT_USERNAME',
+                    pwd: '$MONGO_INITDB_ROOT_PASSWORD',
+                    roles: [{ role: 'root', db: 'admin' }]
+                  });
+                }
+              "
+
+              echo "Initiating replica set..."
+              mongosh --host mongo-0.mongo-service.{{ .Values.namespaces.database }}.svc.cluster.local:27017 -u "$MONGO_INITDB_ROOT_USERNAME" -p "$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin --eval '
+                try {
+                  rs.initiate({
+                    _id: "{{ .Values.mongo.replicaSetName }}",
+                    members: [{ _id: 0, host: "mongo-0.mongo-service.{{ .Values.namespaces.database }}.svc.cluster.local:27017" }]
+                  })
+                } catch (e) {
+                  print("rs.initiate skipped: " + e)
+                }
+              '
+
+              echo "MongoDB initialization complete!"
+          env:
+            - name: MONGO_INITDB_ROOT_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: mongo-secret
+                  key: MONGO_INITDB_ROOT_USERNAME
+            - name: MONGO_INITDB_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mongo-secret
+                  key: MONGO_INITDB_ROOT_PASSWORD
+{{- end }}
