@@ -1,0 +1,33 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: three-tier-app
+  namespace: argocd
+  annotations:
+    argocd-image-updater.argoproj.io/image-list: "backend=maqsoodbangash/food-backend,frontend=maqsoodbangash/food-frontend"
+    argocd-image-updater.argoproj.io/backend.update-strategy: "semver"
+    argocd-image-updater.argoproj.io/frontend.update-strategy: "semver"
+    argocd-image-updater.argoproj.io/backend.allow-tags: "regexp:^v\\d+\\.\\d+\\.\\d+$"
+    argocd-image-updater.argoproj.io/frontend.allow-tags: "regexp:^v\\d+\\.\\d+\\.\\d+$"
+    argocd-image-updater.argoproj.io/backend.helm.image-tag: backend.image.tag
+    argocd-image-updater.argoproj.io/frontend.helm.image-tag: frontend.image.tag
+    argocd-image-updater.argoproj.io/write-back-method: git
+    argocd-image-updater.argoproj.io/git-branch: feature/Maqsood-khan
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Mr-Maqsood-Bangash/Food-Delivery.git
+    path: three-tier-app-helm-chart/three-tier-app
+    targetRevision: feature/Maqsood-khan
+    helm:
+      valueFiles:
+        - values.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
