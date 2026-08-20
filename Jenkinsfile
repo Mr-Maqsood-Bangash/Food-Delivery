@@ -1,17 +1,32 @@
 pipeline {
     agent any
-
     environment {
         DOCKERHUB_CREDENTIALS = credentials('dockerhub-creds')
         BACKEND_IMAGE  = "maqsoodbangash/food-backend"
         FRONTEND_IMAGE = "maqsoodbangash/food-frontend"
     }
-
     stages {
-
         stage('Checkout') {
             steps {
                 checkout scm
+            }
+        }
+
+        stage('Check Skip Condition') {
+            steps {
+                script {
+                    def lastCommitMsg = sh(
+                        script: "git log -1 --pretty=%B",
+                        returnStdout: true
+                    ).trim()
+                    echo "Last commit message: ${lastCommitMsg}"
+
+                    if (lastCommitMsg.contains("automatic update") || lastCommitMsg.contains("ArgoCD Image Updater") || lastCommitMsg.contains("[skip ci]")) {
+                        echo "Skipping build — this commit was made by ArgoCD Image Updater (avoiding CI/CD loop)."
+                        currentBuild.result = 'ABORTED'
+                        error("Stopping pipeline to prevent infinite loop.")
+                    }
+                }
             }
         }
 
@@ -28,7 +43,6 @@ pipeline {
                         """,
                         returnStdout: true
                     ).trim()
-
                     if (backendResp == "") {
                         env.BACKEND_VERSION = "v1.0.0"
                     } else {
@@ -36,7 +50,6 @@ pipeline {
                         env.BACKEND_VERSION = "v${p[0]}.${p[1]}.${p[2].toInteger() + 1}"
                     }
                     echo "New backend version: ${env.BACKEND_VERSION}"
-
                     // ---- Frontend version ----
                     def frontendResp = sh(
                         script: """
@@ -47,7 +60,6 @@ pipeline {
                         """,
                         returnStdout: true
                     ).trim()
-
                     if (frontendResp == "") {
                         env.FRONTEND_VERSION = "v1.0.0"
                     } else {
@@ -58,7 +70,6 @@ pipeline {
                 }
             }
         }
-
         stage('Build Images') {
             parallel {
                 stage('Build Backend') {
@@ -77,13 +88,11 @@ pipeline {
                 }
             }
         }
-
         stage('Login to Docker Hub') {
             steps {
                 sh 'echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin'
             }
         }
-
         stage('Push Images') {
             parallel {
                 stage('Push Backend') {
@@ -99,7 +108,6 @@ pipeline {
             }
         }
     }
-
     post {
         success {
             echo "✅ Backend pushed: ${BACKEND_IMAGE}:${BACKEND_VERSION}"
@@ -108,8 +116,11 @@ pipeline {
         failure {
             echo "❌ Pipeline failed"
         }
+        aborted {
+            echo "⏭️ Build skipped to prevent CI/CD loop."
+        }
         always {
-            sh 'docker logout'
+            sh 'docker logout || true'
         }
     }
 }
