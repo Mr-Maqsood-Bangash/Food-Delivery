@@ -1,10 +1,10 @@
 helm:
   parameters:
   - name: backend.image.tag
-    value: v1.0.3
+    value: v1.0.18
     forcestring: true
   - name: frontend.image.tag
-    value: v1.0.3
+    value: v1.0.18
     forcestring: true
   - name: image.name
     value: maqsoodbangash/food-frontend
