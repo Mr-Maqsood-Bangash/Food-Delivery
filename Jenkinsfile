@@ -1,102 +1,126 @@
 pipeline {
     agent any
-
     environment {
-        DOCKERHUB_CREDENTIALS_ID = 'docker_cred'
-        GITHUB_CREDENTIALS_ID    = 'git_cred'
-        BRANCH_NAME = "${env.BRANCH_NAME}"
-        IMAGE_TAG   = "${env.BRANCH_NAME}-${env.BUILD_NUMBER}"
+        DOCKERHUB_CREDENTIALS = credentials('dockerhub-creds')
+        BACKEND_IMAGE  = "maqsoodbangash/food-backend"
+        FRONTEND_IMAGE = "maqsoodbangash/food-frontend"
     }
-
     stages {
-
-        stage('Clone Repo') {
+        stage('Checkout') {
             steps {
-                git branch: 'dev',
-                    url: 'https://github.com/Mr-Maqsood-Bangash/Food-Delivery.git',
-                    credentialsId: "${GITHUB_CREDENTIALS_ID}"
+                checkout scm
             }
         }
 
-        stage('Docker Hub Login') {
+        stage('Check Skip Condition') {
             steps {
                 script {
-                    withCredentials([usernamePassword(
-                        credentialsId: "${DOCKERHUB_CREDENTIALS_ID}",
-                        usernameVariable: 'DOCKERHUB_USER',
-                        passwordVariable: 'DOCKERHUB_PASS'
-                    )]) {
-                        env.DOCKER_USER = DOCKERHUB_USER
+                    def lastCommitMsg = sh(
+                        script: "git log -1 --pretty=%B",
+                        returnStdout: true
+                    ).trim()
+                    echo "Last commit message: ${lastCommitMsg}"
 
-                        sh '''
-                            echo $DOCKERHUB_PASS | docker login -u $DOCKERHUB_USER --password-stdin
-                        '''
+                    if (lastCommitMsg.contains("automatic update") || lastCommitMsg.contains("ArgoCD Image Updater") || lastCommitMsg.contains("[skip ci]")) {
+                        echo "Skipping build — this commit was made by ArgoCD Image Updater (avoiding CI/CD loop)."
+                        currentBuild.result = 'ABORTED'
+                        error("Stopping pipeline to prevent infinite loop.")
                     }
                 }
             }
         }
 
-        stage('Build & Tag Images') {
+        stage('Determine Versions') {
             steps {
                 script {
-                    env.FRONTEND_TAG_DH = "${env.DOCKER_USER}/three-tier-app-frontend:${env.IMAGE_TAG}"
-                    env.BACKEND_TAG_DH  = "${env.DOCKER_USER}/three-tier-app-backend:${env.IMAGE_TAG}"
-
-                    sh """
-                        docker build -t ${env.BACKEND_TAG_DH} ./backend
-                        docker build -t ${env.FRONTEND_TAG_DH} ./frontend
-                    """
+                    // ---- Backend version ----
+                    def backendResp = sh(
+                        script: """
+                            curl -s "https://hub.docker.com/v2/repositories/${BACKEND_IMAGE}/tags?page_size=100" | \
+                            grep -o '"name":"v[0-9]*\\.[0-9]*\\.[0-9]*"' | \
+                            sed 's/"name":"//;s/"//' | \
+                            sort -V | tail -1
+                        """,
+                        returnStdout: true
+                    ).trim()
+                    if (backendResp == "") {
+                        env.BACKEND_VERSION = "v1.0.0"
+                    } else {
+                        def p = backendResp.replace("v", "").split("\\.")
+                        env.BACKEND_VERSION = "v${p[0]}.${p[1]}.${p[2].toInteger() + 1}"
+                    }
+                    echo "New backend version: ${env.BACKEND_VERSION}"
+                    // ---- Frontend version ----
+                    def frontendResp = sh(
+                        script: """
+                            curl -s "https://hub.docker.com/v2/repositories/${FRONTEND_IMAGE}/tags?page_size=100" | \
+                            grep -o '"name":"v[0-9]*\\.[0-9]*\\.[0-9]*"' | \
+                            sed 's/"name":"//;s/"//' | \
+                            sort -V | tail -1
+                        """,
+                        returnStdout: true
+                    ).trim()
+                    if (frontendResp == "") {
+                        env.FRONTEND_VERSION = "v1.0.0"
+                    } else {
+                        def p = frontendResp.replace("v", "").split("\\.")
+                        env.FRONTEND_VERSION = "v${p[0]}.${p[1]}.${p[2].toInteger() + 1}"
+                    }
+                    echo "New frontend version: ${env.FRONTEND_VERSION}"
                 }
             }
         }
-
-        stage('Push Images to Docker Hub') {
-            steps {
-                sh """
-                    docker push ${env.BACKEND_TAG_DH}
-                    docker push ${env.FRONTEND_TAG_DH}
-                """
-            }
-        }
-
-        stage('Prepare .env for Compose') {
-            steps {
-                script {
-                    writeFile file: '.env', text: """BACKEND_IMAGE=${env.BACKEND_TAG_DH}
-FRONTEND_IMAGE=${env.FRONTEND_TAG_DH}
-"""
+        stage('Build Images') {
+            parallel {
+                stage('Build Backend') {
+                    steps {
+                        dir('backend') {
+                            sh 'docker build -t $BACKEND_IMAGE:$BACKEND_VERSION .'
+                        }
+                    }
+                }
+                stage('Build Frontend') {
+                    steps {
+                        dir('frontend') {
+                            sh 'docker build -t $FRONTEND_IMAGE:$FRONTEND_VERSION .'
+                        }
+                    }
                 }
             }
         }
-
-        stage('Deploy Environment') {
+        stage('Login to Docker Hub') {
             steps {
-                dir("${WORKSPACE}") {
-                    sh """
-                        docker compose --env-file .env down
-                        docker compose --env-file .env pull
-                        docker compose --env-file .env up -d --remove-orphans
-                    """
-                }
+                sh 'echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin'
             }
         }
-
-        stage('Cleanup Local Images') {
-            steps {
-                sh """
-                    docker rmi ${env.BACKEND_TAG_DH} ${env.FRONTEND_TAG_DH} || true
-                """
+        stage('Push Images') {
+            parallel {
+                stage('Push Backend') {
+                    steps {
+                        sh 'docker push $BACKEND_IMAGE:$BACKEND_VERSION'
+                    }
+                }
+                stage('Push Frontend') {
+                    steps {
+                        sh 'docker push $FRONTEND_IMAGE:$FRONTEND_VERSION'
+                    }
+                }
             }
         }
     }
-
     post {
         success {
-            echo "✅ ${env.BRANCH_NAME} environment deployed successfully using Docker Hub images!"
+            echo "✅ Backend pushed: ${BACKEND_IMAGE}:${BACKEND_VERSION}"
+            echo "✅ Frontend pushed: ${FRONTEND_IMAGE}:${FRONTEND_VERSION}"
         }
-
         failure {
-            echo "❌ Deployment failed for ${env.BRANCH_NAME}. Check logs."
+            echo "❌ Pipeline failed"
+        }
+        aborted {
+            echo "⏭️ Build skipped to prevent CI/CD loop."
+        }
+        always {
+            sh 'docker logout || true'
         }
     }
 }
