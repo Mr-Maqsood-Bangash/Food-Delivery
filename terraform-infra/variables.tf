@@ -16,10 +16,10 @@ variable "vpc_cidr" {
   default     = "10.0.0.0/16"
 }
 
-variable "public_subnet_cidr" {
-  description = "CIDR block for the public subnet"
-  type        = string
-  default     = "10.0.0.0/24"
+variable "public_subnet_cidrs" {
+  description = "CIDR blocks for public subnets, one per AZ"
+  type        = list(string)
+  default     = ["10.0.0.0/24", "10.0.1.0/24"]
 }
 
 variable "private_subnet_cidr" {
@@ -33,6 +33,7 @@ variable "availability_zones" {
   type        = list(string)
   default     = ["us-east-1a", "us-east-1b"]
 }
+
 variable "key_pair_name" {
   description = "Name of an EXISTING EC2 key pair (must already exist in AWS)"
   type        = string
@@ -57,9 +58,15 @@ variable "my_ip_cidr" {
 }
 
 variable "frontend_node_port" {
-  description = "NodePort the frontend Kubernetes service is exposed on"
+  description = "NodePort the blue (v1) frontend Kubernetes service is exposed on"
   type        = number
   default     = 30007
+}
+
+variable "green_node_port" {
+  description = "NodePort the green (v2) frontend Kubernetes service is exposed on"
+  type        = number
+  default     = 30008
 }
 
 variable "repo_url" {
