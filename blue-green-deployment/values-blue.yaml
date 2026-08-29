@@ -1,0 +1,76 @@
+namespaces:
+  frontend: blue-frontend
+  backend: blue-backend
+  database: blue-database
+
+storage:
+  create: true
+  storageClassName: blue-standard-storage
+  provisioner: kubernetes.io/no-provisioner
+  volumeBindingMode: WaitForFirstConsumer
+  pv:
+    name: blue-mongo-pv
+    capacity: 1Gi
+    hostPath: /data/blue-mongo
+    accessMode: ReadWriteOnce
+  pvc:
+    name: mongo-pvc
+    size: 1Gi
+
+mongo:
+  username: admin
+  password: securepass
+  replicaSetName: rs0
+  database:
+    image: mongo:6
+    storageRequest: 1Gi
+
+backend:
+  image:
+    repository: maqsoodbangash/food-backend
+    tag: v1.0.3
+    pullPolicy: IfNotPresent
+  replicaCount: 1
+  containerPort: 4000
+  service:
+    port: 4000
+  probes:
+    path: /
+    liveness:
+      initialDelaySeconds: 15
+      periodSeconds: 20
+      timeoutSeconds: 5
+      failureThreshold: 3
+    readiness:
+      initialDelaySeconds: 10
+      periodSeconds: 15
+      timeoutSeconds: 5
+      failureThreshold: 3
+
+frontend:
+  image:
+    repository: maqsoodbangash/food-frontend
+    tag: v1.0.2
+    pullPolicy: IfNotPresent
+  replicaCount: 1
+  containerPort: 3000
+  service:
+    type: NodePort
+    port: 80
+    nodePort: 30007
+  probes:
+    path: /api/food
+    liveness:
+      initialDelaySeconds: 10
+      periodSeconds: 15
+    readiness:
+      initialDelaySeconds: 5
+      periodSeconds: 10
+
+mongoInit:
+  enabled: true
+  image: mongo:6
+  backoffLimit: 5
+
+ingress:
+  enabled: false
