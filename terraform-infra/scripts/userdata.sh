@@ -25,34 +25,41 @@ systemctl start docker
 # ------------------------------------------------------------------
 # 3. Install kubectl
 # ------------------------------------------------------------------
-KUBECTL_VERSION=$$(curl -L -s https://dl.k8s.io/release/stable.txt)
-curl -LO "https://dl.k8s.io/release/$${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
-chmod +x kubectl
-mv kubectl /usr/local/bin/kubectl
+if ! command -v kubectl >/dev/null 2>&1; then
+  KUBECTL_VERSION=$(curl -fsSL https://dl.k8s.io/release/stable.txt)
+  curl -fsSL -o /tmp/kubectl "https://dl.k8s.io/release/$${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+  install -o root -g root -m 0755 /tmp/kubectl /usr/local/bin/kubectl
+fi
+kubectl version --client --output=yaml
 
 # ------------------------------------------------------------------
 # 4. Install kind
 # ------------------------------------------------------------------
-curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.24.0/kind-linux-amd64
-chmod +x ./kind
-mv ./kind /usr/local/bin/kind
+if ! command -v kind >/dev/null 2>&1; then
+  curl -fsSL -o /usr/local/bin/kind https://kind.sigs.k8s.io/dl/v0.24.0/kind-linux-amd64
+  chmod +x /usr/local/bin/kind
+fi
+kind --version
 
 # ------------------------------------------------------------------
-# 5. Install Helm (private server)
+# 5. Install Helm
 # ------------------------------------------------------------------
 if ! command -v helm >/dev/null 2>&1; then
-  curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
-  chmod 700 get_helm.sh
-  ./get_helm.sh
+  HELM_VERSION="v3.15.4"
+  curl -fsSL -o /tmp/helm.tar.gz "https://get.helm.sh/helm-$${HELM_VERSION}-linux-amd64.tar.gz"
+  tar -xzf /tmp/helm.tar.gz -C /tmp
+  install -o root -g root -m 0755 /tmp/linux-amd64/helm /usr/local/bin/helm
 fi
 helm version --short
 
 # ------------------------------------------------------------------
 # 6. Install ArgoCD CLI
 # ------------------------------------------------------------------
-curl -sSL -o argocd-linux-amd64 https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
-chmod +x argocd-linux-amd64
-mv argocd-linux-amd64 /usr/local/bin/argocd
+if ! command -v argocd >/dev/null 2>&1; then
+  curl -fsSL -o /usr/local/bin/argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+  chmod +x /usr/local/bin/argocd
+fi
+argocd version --client
 
 # ------------------------------------------------------------------
 # 7. MongoDB hostPath storage directories (default + blue + green)
