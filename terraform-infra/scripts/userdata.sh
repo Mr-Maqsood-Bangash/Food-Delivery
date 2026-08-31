@@ -1,7 +1,11 @@
 #!/bin/bash
 set -e
 exec > /var/log/user-data.log 2>&1
-echo "=== Starting userdata provisioning: $(date) ==="
+
+REPO_URL="${repo_url}"
+
+echo "=== Starting userdata provisioning: $$(date) ==="
+echo "Using repo URL: $${REPO_URL}"
 
 # ------------------------------------------------------------------
 # 1. Base packages
@@ -21,47 +25,61 @@ systemctl start docker
 # ------------------------------------------------------------------
 # 3. Install kubectl
 # ------------------------------------------------------------------
-KUBECTL_VERSION=$(curl -L -s https://dl.k8s.io/release/stable.txt)
-curl -LO "https://dl.k8s.io/release/$${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
-chmod +x kubectl
-mv kubectl /usr/local/bin/kubectl
+if ! command -v kubectl >/dev/null 2>&1; then
+  KUBECTL_VERSION=$(curl -fsSL https://dl.k8s.io/release/stable.txt)
+  curl -fsSL -o /tmp/kubectl "https://dl.k8s.io/release/$${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+  install -o root -g root -m 0755 /tmp/kubectl /usr/local/bin/kubectl
+fi
+kubectl version --client --output=yaml
 
 # ------------------------------------------------------------------
 # 4. Install kind
 # ------------------------------------------------------------------
-curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.24.0/kind-linux-amd64
-chmod +x ./kind
-mv ./kind /usr/local/bin/kind
+if ! command -v kind >/dev/null 2>&1; then
+  curl -fsSL -o /usr/local/bin/kind https://kind.sigs.k8s.io/dl/v0.24.0/kind-linux-amd64
+  chmod +x /usr/local/bin/kind
+fi
+kind --version
 
 # ------------------------------------------------------------------
 # 5. Install Helm
 # ------------------------------------------------------------------
-curl -fsSL -o get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
-chmod 700 get_helm.sh
-./get_helm.sh
+if ! command -v helm >/dev/null 2>&1; then
+  HELM_VERSION="v3.15.4"
+  curl -fsSL -o /tmp/helm.tar.gz "https://get.helm.sh/helm-$${HELM_VERSION}-linux-amd64.tar.gz"
+  tar -xzf /tmp/helm.tar.gz -C /tmp
+  install -o root -g root -m 0755 /tmp/linux-amd64/helm /usr/local/bin/helm
+fi
+helm version --short
 
 # ------------------------------------------------------------------
 # 6. Install ArgoCD CLI
 # ------------------------------------------------------------------
-curl -sSL -o argocd-linux-amd64 https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
-chmod +x argocd-linux-amd64
-mv argocd-linux-amd64 /usr/local/bin/argocd
+if ! command -v argocd >/dev/null 2>&1; then
+  curl -fsSL -o /usr/local/bin/argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+  chmod +x /usr/local/bin/argocd
+fi
+argocd version --client
 
 # ------------------------------------------------------------------
-# 7. MongoDB hostPath storage directory
+# 7. MongoDB hostPath storage directories (default + blue + green)
 # ------------------------------------------------------------------
 mkdir -p /mnt/kind-storage/mongo
-chmod -R 777 /mnt/kind-storage/mongo
+mkdir -p /mnt/kind-storage/blue-mongo
+mkdir -p /mnt/kind-storage/green-mongo
+chmod -R 777 /mnt/kind-storage/mongo /mnt/kind-storage/blue-mongo /mnt/kind-storage/green-mongo
 
 # ------------------------------------------------------------------
 # 8. Clone the application repository (as ubuntu user)
 # ------------------------------------------------------------------
-sudo -u ubuntu git clone ${repo_url} /home/ubuntu/Food-Delivery
+if [ ! -d /home/ubuntu/Food-Delivery ]; then
+  sudo -u ubuntu bash -lc 'git clone "$1" /home/ubuntu/Food-Delivery' -- "$${REPO_URL}"
+fi
 
 # ------------------------------------------------------------------
-# 9. Kind cluster config
+# 9. Kind cluster config (blue + green NodePorts mapped)
 # ------------------------------------------------------------------
-cat > /home/ubuntu/kind-config.yaml << 'EOF'
+cat > /home/ubuntu/kind-config.yaml << EOF
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 nodes:
@@ -74,22 +92,37 @@ nodes:
       - containerPort: 443
         hostPort: 443
         protocol: TCP
-      - containerPort: 30007
-        hostPort: 30007
+      - containerPort: ${frontend_node_port}
+        hostPort: ${frontend_node_port}
+        protocol: TCP
+      - containerPort: ${green_node_port}
+        hostPort: ${green_node_port}
         protocol: TCP
     extraMounts:
       - hostPath: /mnt/kind-storage/mongo
         containerPath: /data/mongo
+      - hostPath: /mnt/kind-storage/blue-mongo
+        containerPath: /data/blue-mongo
+      - hostPath: /mnt/kind-storage/green-mongo
+        containerPath: /data/green-mongo
   - role: worker
     image: kindest/node:v1.28.0
     extraMounts:
       - hostPath: /mnt/kind-storage/mongo
         containerPath: /data/mongo
+      - hostPath: /mnt/kind-storage/blue-mongo
+        containerPath: /data/blue-mongo
+      - hostPath: /mnt/kind-storage/green-mongo
+        containerPath: /data/green-mongo
   - role: worker
     image: kindest/node:v1.28.0
     extraMounts:
       - hostPath: /mnt/kind-storage/mongo
         containerPath: /data/mongo
+      - hostPath: /mnt/kind-storage/blue-mongo
+        containerPath: /data/blue-mongo
+      - hostPath: /mnt/kind-storage/green-mongo
+        containerPath: /data/green-mongo
 EOF
 chown ubuntu:ubuntu /home/ubuntu/kind-config.yaml
 
@@ -136,4 +169,63 @@ if [ -f "$${APP_DIR}/imageupdater-cr.yaml" ]; then
   sudo -u ubuntu kubectl apply -f "$${APP_DIR}/imageupdater-cr.yaml"
 fi
 
-echo "=== Userdata provisioning complete: $(date) ==="
+# ------------------------------------------------------------------
+# 14. Wait for default MongoDB pod, then initiate replica set + create root user
+#     (fixes the "chicken-and-egg" bug where creating the user before
+#     the replica set exists causes auth to silently fail)
+# ------------------------------------------------------------------
+echo "Waiting for mongo-0 pod (default) to exist..."
+sudo -u ubuntu bash -c '
+until kubectl get pod mongo-0 -n database >/dev/null 2>&1; do
+  echo "mongo-0 pod not created yet, retrying in 5s..."
+  sleep 5
+done
+'
+
+echo "Waiting for mongo-0 pod to be Ready..."
+sudo -u ubuntu kubectl wait --for=condition=Ready pod/mongo-0 -n database --timeout=300s
+
+sleep 10
+
+echo "Initiating MongoDB replica set..."
+sudo -u ubuntu kubectl exec mongo-0 -n database -- mongosh --quiet --eval '
+try {
+  rs.initiate({
+    _id: "rs0",
+    members: [{ _id: 0, host: "mongo-0.mongo-service.database.svc.cluster.local:27017" }]
+  });
+  print("Replica set initiated.");
+} catch (e) {
+  print("rs.initiate skipped (may already be initiated): " + e);
+}
+'
+
+echo "Waiting for replica set to elect a PRIMARY..."
+sudo -u ubuntu bash -c '
+for i in $$(seq 1 30); do
+  STATE=$$(kubectl exec mongo-0 -n database -- mongosh --quiet --eval "rs.status().myState" 2>/dev/null || echo "0")
+  if [ "$$STATE" = "1" ]; then
+    echo "Replica set PRIMARY is ready."
+    break
+  fi
+  echo "Still waiting for PRIMARY (attempt $$i)..."
+  sleep 5
+done
+'
+
+echo "Creating MongoDB root user (if not already present)..."
+sudo -u ubuntu kubectl exec mongo-0 -n database -- mongosh --quiet --eval '
+db = db.getSiblingDB("admin");
+if (!db.getUser("admin")) {
+  db.createUser({
+    user: "admin",
+    pwd: "securepass",
+    roles: [{ role: "root", db: "admin" }]
+  });
+  print("Root user created.");
+} else {
+  print("Root user already exists, skipping.");
+}
+'
+
+echo "=== Userdata provisioning complete: $$(date) ==="

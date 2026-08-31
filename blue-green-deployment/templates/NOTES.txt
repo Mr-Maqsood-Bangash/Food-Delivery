@@ -1,0 +1,19 @@
+Three-tier app deployed.
+
+Namespaces:
+  frontend  -> {{ .Values.namespaces.frontend }}
+  backend   -> {{ .Values.namespaces.backend }}
+  database  -> {{ .Values.namespaces.database }}
+
+Check rollout status:
+  kubectl -n {{ .Values.namespaces.database }} get pods -w
+  kubectl -n {{ .Values.namespaces.backend }} get pods -w
+  kubectl -n {{ .Values.namespaces.frontend }} get pods -w
+
+The mongo-init Job runs automatically as a post-install/upgrade hook and
+initializes the rs0 replica set + root user. Check its logs with:
+  kubectl -n {{ .Values.namespaces.database }} logs job/mongo-init
+
+Frontend is exposed via NodePort {{ .Values.frontend.service.nodePort }}.
+If you mapped that port in your kind-config.yaml, open:
+  http://localhost:{{ .Values.frontend.service.nodePort }}

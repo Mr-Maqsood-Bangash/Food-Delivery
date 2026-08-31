@@ -1,0 +1,6 @@
+apiVersion: v2
+name: blue-green-deployment
+description: Blue/Green deployment of the three-tier food delivery app
+type: application
+version: 0.1.0
+appVersion: "1.0"
