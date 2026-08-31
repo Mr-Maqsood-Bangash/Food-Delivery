@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: frontend-config
+  namespace: {{ .Values.namespaces.frontend }}
+data:
+  REACT_APP_API_BASE_URL: "http://backend-service.{{ .Values.namespaces.backend }}.svc.cluster.local:{{ .Values.backend.service.port }}"

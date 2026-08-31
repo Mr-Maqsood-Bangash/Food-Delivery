@@ -22,10 +22,16 @@ data "aws_ami" "ubuntu" {
 resource "aws_instance" "bastion" {
   ami                         = data.aws_ami.ubuntu.id
   instance_type               = var.bastion_instance_type
-  subnet_id                   = aws_subnet.public.id
+  subnet_id                   = aws_subnet.public[0].id
   vpc_security_group_ids      = [aws_security_group.bastion.id]
   key_name                    = var.key_pair_name
   associate_public_ip_address = true
+
+  user_data = templatefile("${path.module}/scripts/userdata.sh", {
+    repo_url           = var.repo_url
+    frontend_node_port = var.frontend_node_port
+    green_node_port    = var.green_node_port
+  })
 
   tags = {
     Name = "${var.project_name}-bastion"
@@ -36,7 +42,8 @@ resource "aws_instance" "bastion" {
 # Private App Server (private subnet — runs kind cluster)
 # userdata automatically installs Docker, Kind, kubectl, Helm,
 # ArgoCD, ArgoCD CLI, ArgoCD Image Updater, clones the repo,
-# creates the kind cluster, and deploys the app.
+# creates the kind cluster (with blue + green ports mapped),
+# and initiates the MongoDB replica set.
 # ------------------------------------------------------------------
 resource "aws_instance" "private_server" {
   ami                         = data.aws_ami.ubuntu.id
@@ -52,7 +59,9 @@ resource "aws_instance" "private_server" {
   }
 
   user_data = templatefile("${path.module}/scripts/userdata.sh", {
-    repo_url = var.repo_url
+    repo_url           = var.repo_url
+    frontend_node_port = var.frontend_node_port
+    green_node_port    = var.green_node_port
   })
 
   tags = {

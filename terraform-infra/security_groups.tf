@@ -29,11 +29,12 @@ resource "aws_security_group" "bastion" {
 # ------------------------------------------------------------------
 # Private Server Security Group
 #   - SSH only from bastion
-#   - App ports open within VPC for now (ALB rule added in next task)
+#   - Blue + Green frontend NodePorts open within VPC for now
+#     (ALB-scoped rule replaces this in the ALB task)
 # ------------------------------------------------------------------
 resource "aws_security_group" "private_server" {
   name        = "${var.project_name}-private-sg"
-  description = "Allow SSH from bastion, app ports open for later ALB integration"
+  description = "Allow SSH from bastion, blue/green app ports open for later ALB integration"
   vpc_id      = aws_vpc.main.id
 
   ingress {
@@ -45,9 +46,17 @@ resource "aws_security_group" "private_server" {
   }
 
   ingress {
-    description = "Frontend NodePort (temporary open within VPC, ALB rule replaces this later)"
+    description = "Blue frontend NodePort (temporary open within VPC, ALB rule replaces this later)"
     from_port   = var.frontend_node_port
     to_port     = var.frontend_node_port
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr]
+  }
+
+  ingress {
+    description = "Green frontend NodePort (temporary open within VPC, ALB rule replaces this later)"
+    from_port   = var.green_node_port
+    to_port     = var.green_node_port
     protocol    = "tcp"
     cidr_blocks = [var.vpc_cidr]
   }

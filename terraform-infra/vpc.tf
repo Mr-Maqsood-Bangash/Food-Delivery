@@ -23,27 +23,28 @@ resource "aws_internet_gateway" "main" {
 }
 
 # ------------------------------------------------------------------
-# Public Subnet (AZ 1)
+# Public Subnets (2 subnets, across 2 AZs — required for ALB)
 # ------------------------------------------------------------------
 resource "aws_subnet" "public" {
+  count                   = length(var.public_subnet_cidrs)
   vpc_id                  = aws_vpc.main.id
-  cidr_block              = var.public_subnet_cidr
-  availability_zone       = var.availability_zones[0]
+  cidr_block              = var.public_subnet_cidrs[count.index]
+  availability_zone       = var.availability_zones[count.index]
   map_public_ip_on_launch = true
 
   tags = {
-    Name = "${var.project_name}-public-subnet"
+    Name = "${var.project_name}-public-${var.availability_zones[count.index]}"
     Tier = "public"
   }
 }
 
 # ------------------------------------------------------------------
-# Private Subnet (AZ 2 — for high availability across zones)
+# Private Subnet (single, AZ 1)
 # ------------------------------------------------------------------
 resource "aws_subnet" "private" {
   vpc_id            = aws_vpc.main.id
   cidr_block        = var.private_subnet_cidr
-  availability_zone = var.availability_zones[1]
+  availability_zone = var.availability_zones[0]
 
   tags = {
     Name = "${var.project_name}-private-subnet"
@@ -63,11 +64,11 @@ resource "aws_eip" "nat" {
 }
 
 # ------------------------------------------------------------------
-# NAT Gateway (lives in public subnet, gives private subnet outbound access)
+# NAT Gateway (lives in first public subnet)
 # ------------------------------------------------------------------
 resource "aws_nat_gateway" "main" {
   allocation_id = aws_eip.nat.id
-  subnet_id     = aws_subnet.public.id
+  subnet_id     = aws_subnet.public[0].id
 
   tags = {
     Name = "${var.project_name}-nat-gw"
@@ -77,7 +78,7 @@ resource "aws_nat_gateway" "main" {
 }
 
 # ------------------------------------------------------------------
-# Public Route Table -> Internet Gateway
+# Public Route Table -> Internet Gateway (shared by both public subnets)
 # ------------------------------------------------------------------
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
@@ -93,7 +94,8 @@ resource "aws_route_table" "public" {
 }
 
 resource "aws_route_table_association" "public" {
-  subnet_id      = aws_subnet.public.id
+  count          = length(aws_subnet.public)
+  subnet_id      = aws_subnet.public[count.index].id
   route_table_id = aws_route_table.public.id
 }
 
